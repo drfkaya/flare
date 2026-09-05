@@ -1,13 +1,3 @@
-"""
-flare.rff — Orthogonal Random Fourier Features (Yu et al., 2016).
-
-Vanilla RFF'den farkı: ω vektörleri blok-bloq orthogonalize
-edilerek spektral uzayda eşit dağılım sağlanır.
-
-m ≤ d:  Tüm m vektör birbirine dik (tam orthogonal)
-m > d:  ⌈m/d⌉ blok, her blokta d vektör birbirine dik
-"""
-
 import numpy as np
 
 
