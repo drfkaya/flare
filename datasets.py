@@ -1,11 +1,3 @@
-"""
-KALE Benchmark Datasets — Düzeltildi
-=====================================
-Heart ve Ionosphere OpenML düzeltildi.
-Linear sentetik veri eklendi.
-Ground truth coefficients meta'ya eklendi (SIM, LINEAR).
-"""
-
 import numpy as np
 import pandas as pd
 from sklearn.datasets import (
@@ -20,7 +12,7 @@ warnings.filterwarnings('ignore')
 
 
 def load_dataset(name, normalize=True, seed=42):
-    """Veri seti yükle + ön işleme. Returns: X, y, meta"""
+    """Load dataset + preprocessing. Returns: X, y, meta"""
     name = name.lower().strip()
     """
     loaders = {
@@ -37,7 +29,7 @@ def load_dataset(name, normalize=True, seed=42):
         'support2':     _load_support2
     }
     """
-    # load_dataset içindeki loaders dict'ine ekle:
+    # Add to loaders dict inside load_dataset:
     loaders = {
         'breast_cancer': _load_breast_cancer,
         'diabetes':      _load_diabetes,
@@ -53,12 +45,12 @@ def load_dataset(name, normalize=True, seed=42):
         'dor_model2': lambda seed=42: _load_dor(seed, comparison=3, li_features=True),
         'dor_comp2':  lambda seed=42: _load_dor(seed, comparison=2, li_features=False),
         'dor_comp3':  lambda seed=42: _load_dor(seed, comparison=3, li_features=False),
-        # ── KRAL (sürekli) ──
+        # ── KRAL (continuous) ──
         # ── CLNM target ──
         'ptc_clnm':      lambda seed=42: _load_ptc(seed, 'CLNM', False),
         'ptc_clnm_li':   lambda seed=42: _load_ptc(seed, 'CLNM', True),
 
-        # ── LLNM target + CLNM predictor (Li Model 2 ile aynı) ──
+        # ── LLNM target + CLNM predictor (Same as Li Model 2) ──
         'ptc_llnm_clnm':      lambda seed=42: _load_ptc(seed, 'LLNM_CLNM', False),
         'ptc_llnm_clnm_li':   lambda seed=42: _load_ptc(seed, 'LLNM_CLNM', True),
         'eicu': _load_eicu
@@ -74,19 +66,19 @@ def load_dataset(name, normalize=True, seed=42):
 
     if name not in loaders:
         raise ValueError(
-            f"'{name}' bulunamadı. "
-            f"Geçerli: {', '.join(loaders.keys())}")
+            f"'{name}' not found. "
+            f"Valid: {', '.join(loaders.keys())}")
 
     X, y, meta = loaders[name](seed=seed)
     X = np.asarray(X, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64).ravel()
 
-    # Binary kontrol
+    # Binary check
     if len(np.unique(y)) != 2:
-        raise ValueError(f"Binary etiket gerekli, "
-                         f"{len(np.unique(y))} sınıf bulundu")
+        raise ValueError(f"Binary label required, "
+                         f"{len(np.unique(y))} classes found")
 
-    # NaN/Inf temizliği
+    # NaN/Inf cleanup
     mask = np.isnan(X).any(axis=1) | np.isinf(X).any(axis=1)
     if mask.any():
         meta['n_dropped_nan'] = int(mask.sum())
@@ -94,7 +86,7 @@ def load_dataset(name, normalize=True, seed=42):
     else:
         meta['n_dropped_nan'] = 0
 
-    # Normalizasyon
+    # Normalization
     if normalize:
         scaler = StandardScaler()
         X = scaler.fit_transform(X)
@@ -116,26 +108,26 @@ def load_dataset(name, normalize=True, seed=42):
 # =====================================================================
 def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
     """
-    GOSSIS-1-eICU — İlk 24 saat ICU verileri.
+    GOSSIS-1-eICU — First 24 hours ICU data.
 
     Parameters
     ----------
     subgroup : str
         'all', 'sepsis', 'vent', 'sepsis_vent', 'floor', 'interm'
     feature_set : str
-        'full'      → tüm öznitelikler (d≈150-600)
-        'focused'   → β'e dayalı klinik öznitelikler (d≈25)
-        'optimized' → β + temizlenmiş kategorikler (d≈40-50)
+        'full'      → all features (d≈150-600)
+        'focused'   → β-based clinical features (d≈25)
+        'optimized' → β + cleaned categoricals (d≈40-50)
     """
     import os
     csv_path = os.path.join(os.getcwd(), 'eicu.csv')
 
     if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"eicu.csv bulunamadı: {csv_path}")
+        raise FileNotFoundError(f"eicu.csv not found: {csv_path}")
 
     df = pd.read_csv(csv_path, na_values=['?', ''])
 
-    # ── ALT GRUP FİLTRE ──
+    # ── SUBGROUP FILTER ──
     filters = {
         'all': pd.Series(True, index=df.index),
         'sepsis': df['group'] == 'Sepsis',
@@ -146,7 +138,7 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
     }
     df = df[filters[subgroup]].reset_index(drop=True)
 
-    # ── HEDEF + PARTITION ──
+    # ── TARGET + PARTITION ──
     y = df['hospital_death'].astype(np.float64).values
     train_mask = (df['partition'] == 'training').values
     test_mask = (df['partition'] == 'testing').values
@@ -156,7 +148,7 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
     # ═══════════════════════════════════════════════════════
     if feature_set == 'optimized':
 
-        # ── 1. Sayısal fizyolojik (β'e göre sıralı) ──
+        # ── 1. Numerical physiological (sorted by β) ──
         physio_avg = [
             'd1_lactate_avg',       # β=0.598 ***
             'd1_albumin_avg',       # β=-0.360 ***
@@ -185,7 +177,7 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
             'd1_calcium_diff',      # β=-0.073 *
         ]
 
-        # ── 2. Klinik binary ──
+        # ── 2. Clinical binary ──
         clinical = [
             'age',                  # β=0.407 ***
             'vent',                 # β=0.343 ***
@@ -195,15 +187,15 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
             'cirrhosis',            # β=0.059 *
         ]
 
-        # ── 3. Kategorik — SADECE ANLAMLI LEVEL'LAR ──
+        # ── 3. Categorical — ONLY MEANINGFUL LEVELS ──
         # dx_class: 502Sepsis (β=-0.160, p<0.001)
         if 'dx_class' in df.columns:
             df['dx_is_502'] = (
                 df['dx_class'] == '502Sepsis').astype(float)
-            # 501Sepsis at (p=0.229)
+            # 501Sepsis drop (p=0.229)
 
-        # dcs_group: ALL_LOW, INTERM, SOME_HIGH tut
-        #            ALL_HIGH at (p=0.110) — reference
+        # dcs_group: Keep ALL_LOW, INTERM, SOME_HIGH
+        #            Drop ALL_HIGH (p=0.110) — reference
         if 'dcs_group' in df.columns:
             df['dcs_all_low'] = (
                 df['dcs_group'] == 'ALL_LOW').astype(float)
@@ -214,7 +206,7 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
             # ALL_HIGH = reference (0,0,0)
 
         # icu_admit_source: Floor + Other Hospital
-        #                    A&E, OR, Other ICU at
+        #                    Drop A&E, OR, Other ICU
         if 'icu_admit_source' in df.columns:
             df['src_floor'] = (
                 df['icu_admit_source'] == 'Floor').astype(float)
@@ -222,10 +214,10 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
                 df['icu_admit_source'] == 'Other Hospital').astype(float)
             # A&E, OR, Other ICU = reference (0,0)
 
-        # group AT (hepsi Sepsis → sabit)
-        # dx_sub AT (7 level, 6'sı anlamsız)
+        # group DROP (all Sepsis → constant)
+        # dx_sub DROP (7 levels, 6 insignificant)
 
-        # ── 4. Birleştir ──
+        # ── 4. Combine ──
         optimized_cats = [
             'dx_is_502',
             'dcs_all_low', 'dcs_interm', 'dcs_some_high',
@@ -237,7 +229,7 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
         X = df[feature_cols].astype(np.float64).values
 
     # ═══════════════════════════════════════════════════════
-    # FEATURE SET: focused (sadece sayısal)
+    # FEATURE SET: focused (numerical only)
     # ═══════════════════════════════════════════════════════
     elif feature_set == 'focused':
         physio_avg = [
@@ -263,7 +255,7 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
         X = df[feature_cols].astype(np.float64).values
 
     # ═══════════════════════════════════════════════════════
-    # FEATURE SET: full (orijinal)
+    # FEATURE SET: full (original)
     # ═══════════════════════════════════════════════════════
     else:
         drop_cols = [
@@ -283,14 +275,14 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
         feature_cols = [c for c in df.columns if c not in drop_cols]
         X = df[feature_cols].astype(np.float64).values
 
-    # ── İMPUTE ──
+    # ── IMPUTE ──
     for j in range(X.shape[1]):
         col = X[:, j]
         miss = np.isnan(col)
         if miss.any():
             col[miss] = np.nanmedian(col[~miss])
 
-    # ── TEMİZLİK ──
+    # ── CLEANUP ──
     mask = np.isfinite(X).all(axis=1)
     X, y = X[mask], y[mask]
     train_mask = train_mask[mask]
@@ -312,24 +304,24 @@ def _load_eicu(seed=42, subgroup='sepsis', feature_set='focused'):
 def _load_ptc(seed=42, target='CLNM', li_features=False):
     """
     PTC — Papillary Thyroid Cancer, LNM Prediction
-    Kaynak: Single center, n≈2428
-    Dosya: ptc.xlsx (aynı dizinde, Excel)
+    Source: Single center, n≈2428
+    File: ptc.xlsx (in same directory, Excel)
 
     target='CLNM'  → Central lymph node metastasis
     target='LLNM'  → Lateral lymph node metastasis
-    target='LLNM_CLNM' → LLNM, CLNM predictor olarak dahil
+    target='LLNM_CLNM' → LLNM, CLNM included as predictor
 
-    li_features=True  → Li et al.'ın cutoff'ları
-    li_features=False → Sürekli + tüm feature'lar
+    li_features=True  → Li et al.'s cutoffs
+    li_features=False → Continuous + all features
     """
     xlsx_path = os.path.join(os.getcwd(), 'ptc.xlsx')
     if not os.path.exists(xlsx_path):
-        raise FileNotFoundError(f"ptc.xlsx bulunamadı: {xlsx_path}")
+        raise FileNotFoundError(f"ptc.xlsx not found: {xlsx_path}")
 
     xls = pd.ExcelFile(xlsx_path)
     first_sheet = xls.sheet_names[0]
     df = pd.read_excel(xlsx_path, sheet_name=first_sheet)
-    print(f"  Sheet: '{first_sheet}', {len(df)} satır")
+    print(f"  Sheet: '{first_sheet}', {len(df)} rows")
 
     if 'number' in df.columns:
         df = df.drop_duplicates(subset=['number'], keep='first')
@@ -337,7 +329,7 @@ def _load_ptc(seed=42, target='CLNM', li_features=False):
 
     df.columns = df.columns.str.strip()
 
-    # ── VİRGÜL ONDALIK ──
+    # ── COMMA DECIMAL ──
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = (df[col].astype(str)
@@ -348,7 +340,7 @@ def _load_ptc(seed=42, target='CLNM', li_features=False):
                 df[col] = converted
 
     # ── TARGET ──
-    # LLNM_CLNM → target LLNM ama CLNM feature olarak kalır
+    # LLNM_CLNM → target LLNM but CLNM remains as feature
     actual_target = target
     include_clnm = False
     if target.upper() == 'LLNM_CLNM':
@@ -372,12 +364,12 @@ def _load_ptc(seed=42, target='CLNM', li_features=False):
           f"0={(df[target_col]==0).sum()})")
     y = df[target_col].astype(np.float64).values
 
-    # ── SIZINTI AT (ama CLNM'yi koru eğer gerekliyse) ──
+    # ── DROP LEAKAGE (but keep CLNM if needed) ──
     drop_cols = ['number', 'LLMN', 'LLNM']
     if not include_clnm:
-        drop_cols.append('CLNM')    # target değilse CLNM'yi de at
+        drop_cols.append('CLNM')    # drop CLNM if not target
     else:
-        # CLNM feature olarak kalacak, sadece rename et
+        # CLNM remains as feature, just rename handled elsewhere if needed
         pass
     df = df.drop(columns=[c for c in drop_cols if c in df.columns],
                  errors='ignore')
@@ -388,7 +380,7 @@ def _load_ptc(seed=42, target='CLNM', li_features=False):
                       .map({'male': 1, 'female': 0}))
         df = df.drop(columns=['gender'])
 
-    # ── LOCATION TEMİZLEME ──
+    # ── LOCATION CLEANUP ──
     if 'location' in df.columns:
         df['location'] = (df['location'].astype(str)
                           .str.strip().str.lower()
@@ -430,7 +422,7 @@ def _load_ptc(seed=42, target='CLNM', li_features=False):
         loc_cols = ['loc_upper', 'loc_lower', 'loc_isthmus', 'loc_middle']
         features = continuous + binary + loc_cols
         if include_clnm and 'CLNM' in df.columns:
-            features.insert(0, 'CLNM')  # Li'nin LLNM modelinde CLNM predictor
+            features.insert(0, 'CLNM')  # CLNM predictor in Li's LLNM model
             mode_desc = "KRAL (LLNM+CLNM): 3 cont + 6 binary + 4 location"
         else:
             mode_desc = "KRAL: 3 cont + 5 binary + 4 location"
@@ -464,27 +456,27 @@ def _load_dor(seed=42, comparison=1, li_features=False):
     """
     DOR — Diminished Ovarian Reserve
 
-    comparison=1: Tüm hastalar → clinical pregnancy (n≈900)
-    comparison=2: Yumurta alanlar → TE (n≈778)
-    comparison=3: ET hastaları → clinical pregnancy (n≈412)
+    comparison=1: All patients → clinical pregnancy (n≈900)
+    comparison=2: Egg retrievers → TE (n≈778)
+    comparison=3: ET patients → clinical pregnancy (n≈412)
 
-    li_features=True  → Li et al.'ın kullandığı değişkenlerle
-    li_features=False → Tüm değişkenlerle
+    li_features=True  → Variables used by Li et al.
+    li_features=False → All variables
     """
     xlsx_path = os.path.join(os.getcwd(), 'dor.xlsx')
     if not os.path.exists(xlsx_path):
-        raise FileNotFoundError(f"dor.xlsx bulunamadı: {xlsx_path}")
+        raise FileNotFoundError(f"dor.xlsx not found: {xlsx_path}")
 
     xls = pd.ExcelFile(xlsx_path)
     sheet_names = xls.sheet_names
-    print(f"  Sheet'ler: {sheet_names}")
+    print(f"  Sheets: {sheet_names}")
 
     dfs = {}
     for i, sheet in enumerate(sheet_names, 1):
         dfs[i] = pd.read_excel(xlsx_path, sheet_name=sheet)
-        print(f"  Sheet{i}: {len(dfs[i])} satır")
+        print(f"  Sheet{i}: {len(dfs[i])} rows")
 
-    # Comparison'a göre sheet ve target
+    # Sheet and target based on comparison
     if comparison == 1:
         df = dfs[1].copy()
     elif comparison == 2:
@@ -492,11 +484,11 @@ def _load_dor(seed=42, comparison=1, li_features=False):
     elif comparison == 3:
         df = dfs[3].copy()
     else:
-        raise ValueError("comparison 1, 2 veya 3 olmalı")
+        raise ValueError("comparison must be 1, 2, or 3")
 
     df.columns = df.columns.str.strip()
 
-    # ── VİRGÜL ONDALIK ──
+    # ── COMMA DECIMAL ──
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = (df[col].astype(str)
@@ -506,7 +498,7 @@ def _load_dor(seed=42, comparison=1, li_features=False):
             if converted.notna().sum() > 0.3 * len(df):
                 df[col] = converted
 
-    # ── TARGET BUL ──
+    # ── FIND TARGET ──
     y = None
     for col in df.columns:
         col_clean = col.strip().lower()
@@ -519,9 +511,9 @@ def _load_dor(seed=42, comparison=1, li_features=False):
 
     if y is None:
         raise ValueError(
-            f"Target bulunamadı. Sütunlar: {list(df.columns)}")
+            f"Target not found. Columns: {list(df.columns)}")
 
-    # ── SÜTUN İSİMLERİ ──
+    # ── COLUMN NAMES ──
     rename_map = {}
     for col in df.columns:
         c = col.strip().lower()
@@ -597,11 +589,11 @@ def _load_dor(seed=42, comparison=1, li_features=False):
             rename_map[col] = 'AFC'
     df = df.rename(columns=rename_map)
 
-    # ── MALE AGE (varsa) ──
+    # ── MALE AGE (if exists) ──
     if 'age2' in df.columns:
         df['male_age'] = df['age2'].astype(np.float64)
 
-    # ── SIZINTI AT ──
+    # ── DROP LEAKAGE ──
     drop_cols = [
         'KEYCOD', 'age2',
         'n_te', 'n_good_embryos', 'embryo_stage',
@@ -613,7 +605,7 @@ def _load_dor(seed=42, comparison=1, li_features=False):
     df = df.drop(columns=[c for c in drop_cols if c in df.columns],
                  errors='ignore')
 
-    # ── PROTOKOL ENCODING ──
+    # ── PROTOCOL ENCODING ──
     if 'protocol' in df.columns:
         if df['protocol'].dtype == object:
             proto_dummies = pd.get_dummies(
@@ -625,10 +617,10 @@ def _load_dor(seed=42, comparison=1, li_features=False):
         df = pd.concat([df, proto_dummies], axis=1)
         df = df.drop(columns=['protocol'])
 
-    # ── FEATURE SEÇİMİ ──
+    # ── FEATURE SELECTION ──
     if li_features:
         # ═══════════════════════════════════════════
-        #  Li et al.'ın KULLANDIĞI değişkenler
+        #  Variables USED by Li et al.
         # ═══════════════════════════════════════════
         if comparison == 2:
             # Model 1: TE prediction
@@ -643,10 +635,10 @@ def _load_dor(seed=42, comparison=1, li_features=False):
                          "n_delivery, AFC, age, male_age")
         else:
             raise ValueError(
-                "li_features=True sadece comparison=2 veya 3 ile")
+                "li_features=True only with comparison=2 or 3")
     else:
         # ═══════════════════════════════════════════
-        #  TÜM değişkenler (orijinal loader)
+        #  ALL variables (original loader)
         # ═══════════════════════════════════════════
         baseline_cont = [
             'age', 'BMI', 'FSH', 'E2', 'P', 'LH', 'T',
@@ -668,7 +660,7 @@ def _load_dor(seed=42, comparison=1, li_features=False):
     available = [c for c in features if c in df.columns]
     missing = [c for c in features if c not in df.columns]
     if missing:
-        print(f"  ⚠ Eksik sütunlar: {missing}")
+        print(f"  ⚠ Missing columns: {missing}")
 
     X = df[available].astype(np.float64).values
 
@@ -696,15 +688,15 @@ def _load_dor(seed=42, comparison=1, li_features=False):
 def _load_fic(seed=42):
     """
     FIC — Fluoropyrimidine-Induced Cardiotoxicity
-    Kaynak: Guizhou Medical University, CRC patients
-    Dosya: fic.xlsx (aynı dizinde, Excel)
+    Source: Guizhou Medical University, CRC patients
+    File: fic.xlsx (in same directory, Excel)
 
-    n ≈ 754 hasta
-    Target: cardiotoxicity (0/1) — definitive, censored YOK
+    n ≈ 754 patients
+    Target: cardiotoxicity (0/1) — definitive, NO censoring
 
-    Hazırlık:
-      - ID sildi, stage düzeltildi (Roma rakamları → sayı)
-      - Virgül ondalık düzeltildi
+    Preparation:
+      - ID dropped, stage corrected (Roman numerals → numbers)
+      - Comma decimal corrected
     """
     xlsx_path = os.path.join(os.getcwd(), 'fic.xlsx')
     csv_path = os.path.join(os.getcwd(), 'fic.csv')
@@ -716,7 +708,7 @@ def _load_fic(seed=42):
             '', ' ', 'NA', 'NaN', 'N/A'])
     else:
         raise FileNotFoundError(
-            f"fic.xlsx veya fic.csv bulunamadı")
+            f"fic.xlsx or fic.csv not found")
 
     df.columns = df.columns.str.strip()
     df = df.loc[:, df.columns != '']
@@ -724,7 +716,7 @@ def _load_fic(seed=42):
                           if c.startswith('Unnamed')],
                  errors='ignore')
 
-    # ── VİRGÜL ONDALIK DÜZELTMESİ ──
+    # ── COMMA DECIMAL CORRECTION ──
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = (df[col].astype(str)
@@ -734,7 +726,7 @@ def _load_fic(seed=42):
             if converted.notna().sum() > 0.5 * len(df):
                 df[col] = converted
 
-    # ── SÜTUN İSİMLERİ ──
+    # ── COLUMN NAMES ──
     rename_map = {}
     for col in df.columns:
         c = col.strip()
@@ -755,18 +747,18 @@ def _load_fic(seed=42):
     # ── TARGET ──
     target_col = 'cardiotoxicity'
     if target_col not in df.columns:
-        raise ValueError(f"'{target_col}' bulunamadı. "
-                         f"Mevcut: {list(df.columns)}")
+        raise ValueError(f"'{target_col}' not found. "
+                         f"Available: {list(df.columns)}")
     y = df[target_col].astype(np.float64).values
 
-    # ── SIZINTI AT ──
+    # ── DROP LEAKAGE ──
     drop_cols = ['clinical_manifestation', 'CTCAE', target_col]
     df = df.drop(columns=[c for c in drop_cols if c in df.columns],
                  errors='ignore')
 
     # ── STAGE → ORDINAL ──
     if 'stage' in df.columns:
-        # Kullanıcı düzelttiyse sayısal olabilir
+        # If user corrected it, it might be numeric
         if df['stage'].dtype == object:
             def parse_stage(val):
                 if pd.isna(val):
@@ -822,12 +814,12 @@ def _load_fic(seed=42):
         'source': 'Guizhou Medical Univ./CRC patients',
         'n_raw': len(y), 'd_raw': X.shape[1],
         'description': ('Fluoropyrimidine cardiotoxicity, '
-                        'sürekli+klinik, censored YOK'),
+                        'continuous+clinical, NO censoring'),
         'feature_names': available,
         'real_data': True,
         'leakage_removed': [
             'clinical_manifestation (post-outcome)',
-            'CTCAE (post-outcome toksisite grading)',
+            'CTCAE (post-outcome toxicity grading)',
         ],
     }
 
@@ -837,7 +829,7 @@ def _load_breast_cancer(seed=42):
     return d.data, d.target, {
         'name': 'Breast Cancer', 'source': 'sklearn/UCI',
         'n_raw': d.data.shape[0], 'd_raw': d.data.shape[1],
-        'description': 'Meme kanseri (benign vs malignant)',
+        'description': 'Breast cancer (benign vs malignant)',
     }
 
 def _load_wine(seed=42):
@@ -846,7 +838,7 @@ def _load_wine(seed=42):
     return d.data, y, {
         'name': 'Wine', 'source': 'sklearn/UCI',
         'n_raw': d.data.shape[0], 'd_raw': d.data.shape[1],
-        'description': 'Şarap (class 0 vs rest)',
+        'description': 'Wine (class 0 vs rest)',
     }
 
 def _load_digits(seed=42):
@@ -855,7 +847,7 @@ def _load_digits(seed=42):
     return d.data, y, {
         'name': 'Digits (8 vs rest)', 'source': 'sklearn/UCI',
         'n_raw': d.data.shape[0], 'd_raw': d.data.shape[1],
-        'description': 'Rakam tanıma (8 vs diğerleri)',
+        'description': 'Digit recognition (8 vs others)',
     }
 
 def _load_iris(seed=42):
@@ -864,16 +856,16 @@ def _load_iris(seed=42):
     return d.data, y, {
         'name': 'Iris (class 2 vs rest)', 'source': 'sklearn/UCI',
         'n_raw': d.data.shape[0], 'd_raw': d.data.shape[1],
-        'description': 'Çiçek (virginica vs rest)',
+        'description': 'Flower (virginica vs rest)',
     }
 
 
 # =====================================================================
-# OPENML DATASETS — DÜZELTİLDİ
+# OPENML DATASETS — FIXED
 # =====================================================================
 
 def _openml_load(data_id=None, name=None):
-    """OpenML yükleme — parser denemeli."""
+    """OpenML load — try parsers."""
     for parser in ['pandas', 'auto']:
         try:
             if data_id is not None:
@@ -886,7 +878,7 @@ def _openml_load(data_id=None, name=None):
                     as_frame=True, parser=parser)
         except Exception:
             continue
-    raise ValueError(f"OpenML yüklenemedi: id={data_id}, name={name}")
+    raise ValueError(f"OpenML load failed: id={data_id}, name={name}")
 
 
 def _openml_to_numpy(df_X, y_raw, impute=True):
@@ -907,16 +899,16 @@ def _openml_to_numpy(df_X, y_raw, impute=True):
 def _load_heart(seed=42):
     """
     Heart Disease — UCI Cleveland.
-    OpenML data_id=432 ile yüklenir.
-    Kontrol: n≈303, d≈13 olmalı.
+    Loaded via OpenML data_id=432.
+    Check: n≈303, d≈13 expected.
     """
     df_X, y_raw = _openml_load(data_id=432)
 
     if len(df_X) < 100 or len(df_X.columns) > 20:
         raise ValueError(
-            f"Heart: beklenmeyen boyut n={len(df_X)}, "
+            f"Heart: unexpected size n={len(df_X)}, "
             f"d={len(df_X.columns)}. "
-            "OpenML farklı data döndürdü.")
+            "OpenML returned different data.")
 
     X, y = _openml_to_numpy(df_X, y_raw, impute=True)
 
@@ -926,7 +918,7 @@ def _load_heart(seed=42):
     return X, y, {
         'name': 'Heart Disease', 'source': 'UCI/OpenML(id=432)',
         'n_raw': len(y), 'd_raw': X.shape[1],
-        'description': 'Kalp hastalığı (Cleveland)',
+        'description': 'Heart disease (Cleveland)',
         'imputed': True,
         'feature_names': list(df_X.columns),
     }
@@ -947,7 +939,7 @@ def _load_diabetes(seed=42):
     return X, y, {
         'name': 'Pima Diabetes', 'source': 'OpenML(id=37)',
         'n_raw': len(y), 'd_raw': X.shape[1],
-        'description': 'Diyabet (Pima Indian)',
+        'description': 'Diabetes (Pima Indian)',
         'imputed': True,
         'imputed_columns': zero_cols,
     }
@@ -956,23 +948,23 @@ def _load_diabetes(seed=42):
 def _load_ionosphere(seed=42):
     """
     Ionosphere — UCI.
-    OpenML data_id=59 ile yüklenir.
-    Kontrol: n≈351, d≈34 olmalı.
+    Loaded via OpenML data_id=59.
+    Check: n≈351, d≈34 expected.
     """
     df_X, y_raw = _openml_load(data_id=59)
 
     if len(df_X) < 100 or len(df_X.columns) < 10:
         raise ValueError(
-            f"Ionosphere: beklenmeyen boyut n={len(df_X)}, "
+            f"Ionosphere: unexpected size n={len(df_X)}, "
             f"d={len(df_X.columns)}. "
-            "OpenML farklı data döndürdü.")
+            "OpenML returned different data.")
 
     X, y = _openml_to_numpy(df_X, y_raw, impute=True)
 
     return X, y, {
         'name': 'Ionosphere', 'source': 'UCI/OpenML(id=59)',
         'n_raw': len(y), 'd_raw': X.shape[1],
-        'description': 'İyonosfer radar sinyali',
+        'description': 'Ionosphere radar signal',
     }
 
 
@@ -984,26 +976,26 @@ def _load_australian(seed=42):
     return X, y, {
         'name': 'Australian Credit', 'source': 'OpenML(id=40981)',
         'n_raw': len(y), 'd_raw': X.shape[1],
-        'description': 'Kredi onay (Avustralya)',
+        'description': 'Credit approval (Australia)',
     }
 
 
 # =====================================================================
-# SENTETİK DATASETLER
+# SYNTHETIC DATASETS
 # =====================================================================
 
 def _load_sim(seed=42):
     """
-    SIM — Makale ile uyumlu sentetik nonlinear veri.
+    SIM — Synthetic nonlinear data compatible with paper.
 
-    DGP (orijinal):
+    DGP (original):
         bmi_risk     = 0.8 * ((BMI - 24)^2) / 10
         glucose_risk = threshold nonlinearity
         age_smoke    = 0.04 * Age * Smoke      ← interaction
         bp_risk      = piecewise linear + quadratic
 
-    Ground truth: β lineer katsayılar approximately,
-    ama nonlinear terimler dominant.
+    Ground truth: β linear coefficients approximately,
+    but nonlinear terms dominant.
     """
     rng = np.random.default_rng(seed)
     n = 5000
@@ -1067,9 +1059,9 @@ def _load_sim(seed=42):
 
 def _load_linear(seed=42):
     """
-    Sentetik doğrusal veri.
+    Synthetic linear data.
     logit = Xw + b, 3 irrelevant features.
-    Gerçek β biliniyor → karşılaştırma için.
+    True β known → for comparison.
     """
     rng = np.random.default_rng(seed)
     n = 5000
@@ -1077,7 +1069,7 @@ def _load_linear(seed=42):
 
     X = rng.normal(size=(n, d))
 
-    # Gerçek katsayılar
+    # True coefficients
     w = np.array([0.8, -1.2, 0.5, 0.0, 0.0, 0.3, -0.6, 0.0])
     b = 0.2
     noise = rng.normal(scale=0.5, size=n)
@@ -1127,29 +1119,29 @@ except NameError:
 
 
 def _fetch_zip(url, dirname):
-    """ZIP indir → çıkar (önbellekli)."""
+    """Download ZIP → extract (cached)."""
     os.makedirs(_DATA_DIR, exist_ok=True)
     target = os.path.join(_DATA_DIR, dirname)
     if os.path.isdir(target) and any(
             f.endswith('.csv') for f in os.listdir(target)):
         return target
     zip_path = os.path.join(_DATA_DIR, dirname + '.zip')
-    print(f"  ↓ {dirname} indiriliyor ({url[:60]}...)")
+    print(f"  ↓ Downloading {dirname} ({url[:60]}...)")
     try:
         urllib.request.urlretrieve(url, zip_path)
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(target)
         os.remove(zip_path)
-        print(f"  ✓ {dirname} hazır")
+        print(f"  ✓ {dirname} ready")
     except Exception as e:
         raise ValueError(
-            f"İndirme başarısız: {url}\n  {e}\n"
-            f"  Manuel indirip {target}/ dizinine çıkarın.")
+            f"Download failed: {url}\n  {e}\n"
+            f"  Manually download and extract to {target}/ directory.")
     return target
 
 
 def _find_csv(directory, pattern):
-    """Dizinde CSV dosyası ara."""
+    """Search for CSV file in directory."""
     for root, _, files in os.walk(directory):
         for f in files:
             if pattern in f.lower() and f.endswith('.csv'):
@@ -1158,61 +1150,61 @@ def _find_csv(directory, pattern):
 
 
 # =====================================================================
-# 1. UCI DIABETES 130-US HOSPITALS  (gerçek, ~101K, otomatik indirir)
+# 1. UCI DIABETES 130-US HOSPITALS  (real, ~101K, auto-download)
 # =====================================================================
 def _load_support2(seed=42):
     """
-    SUPPORT2 — GERÇEK klinik mortalite veri seti.
-    SIZINTI TEMİZ — sadece kabul anı bilgisi.
+    SUPPORT2 — REAL clinical mortality dataset.
+    LEAKAGE CLEAN — only admission time info.
 
-    Kaynak  : UCI (id=880)
-    Boyut   : ~9,105 hasta
-    Hedef   : Hastane mortalitesi (1) vs taburcu (0)
+    Source  : UCI (id=880)
+    Size    : ~9,105 patients
+    Target  : Hospital mortality (1) vs discharge (0)
     """
     csv_path = os.path.join(os.getcwd(), 'support2.csv')
 
     if not os.path.exists(csv_path):
         raise FileNotFoundError(
-            f"support2.csv bulunamadı: {csv_path}\n"
-            f"Çalışma dizinine support2.csv koy.")
+            f"support2.csv not found: {csv_path}\n"
+            f"Place support2.csv in working directory.")
 
     df = pd.read_csv(csv_path, na_values=['?'])
 
     y = df['hospdead'].astype(np.float64).values
 
-    # ── SIZINTI YOK: sadece kabul anı öznitelikleri ──
+    # ── NO LEAKAGE: only admission time attributes ──
     num_cols = [
-        'age',          # demografik
-        'num.co',       # komorbidite sayısı
-        'sps',          # SUPPORT fizyoloji skoru (kabul anı)
-        'aps',          # Apache III skoru (kabul anı)
-        'diabetes',     # komorbidite
-        'dementia',     # komorbidite
-        'meanbp',       # kan basıncı (kabul anı)
-        'wblc',         # lökosit (kabul anı)
-        'hrt',          # nabız (kabul anı)
-        'resp',         # solunum (kabul anı)
-        'temp',         # sıcaklık (kabul anı)
-        'alb',          # albumin (kabul anı lab)
-        'bili',         # bilirubin (kabul anı lab)
-        'crea',         # kreatinin (kabul anı lab)
-        'sod',          # sodyum (kabul anı lab)
-        'ph',           # pH (kabul anı lab)
-        'glucose',      # glikoz (kabul anı lab)
-        'bun',          # BUN (kabul anı lab)
-        'urine',        # idrar çıkışı (kabul anı)
-        'adlp',         # ADL hasta
-        'adls',         # ADL vekil
+        'age',          # demographic
+        'num.co',       # comorbidity count
+        'sps',          # SUPPORT physiology score (admission)
+        'aps',          # Apache III score (admission)
+        'diabetes',     # comorbidity
+        'dementia',     # comorbidity
+        'meanbp',       # blood pressure (admission)
+        'wblc',         # leukocyte (admission)
+        'hrt',          # pulse (admission)
+        'resp',         # respiration (admission)
+        'temp',         # temperature (admission)
+        'alb',          # albumin (admission lab)
+        'bili',         # bilirubin (admission lab)
+        'crea',         # creatinine (admission lab)
+        'sod',          # sodium (admission lab)
+        'ph',           # pH (admission lab)
+        'glucose',      # glucose (admission lab)
+        'bun',          # BUN (admission lab)
+        'urine',        # urine output (admission)
+        'adlp',         # ADL patient
+        'adls',         # ADL surrogate
     ]
 
-    # ── SIZINTI VAR → ATILDI ──
-    # 'd.time'    → ölüm/takip süresi (HEDFI TAŞIYOR)
-    # 'prg2m'     → doktor 2 ay survival tahmini (HEDFI TAŞIYOR)
-    # 'prg6m'     → doktor 6 ay survival tahmini (HEDFI TAŞIYOR)
-    # 'surv2m'    → model 2 ay survival tahmini (HEDFI TAŞIYOR)
-    # 'surv6m'    → model 6 ay survival tahmini (HEDFI TAŞIYOR)
-    # 'slos'      → kalış süresi (post-admission, dolaylı sızıntı)
-    # 'hday'      → kayıt günü (post-admission)
+    # ── LEAKAGE PRESENT → DROPPED ──
+    # 'd.time'    → death/follow-up time (CARRIES HEDFI)
+    # 'prg2m'     → doctor 2 month survival estimate (CARRIES HEDFI)
+    # 'prg6m'     → doctor 6 month survival estimate (CARRIES HEDFI)
+    # 'surv2m'    → model 2 month survival estimate (CARRIES HEDFI)
+    # 'surv6m'    → model 6 month survival estimate (CARRIES HEDFI)
+    # 'slos'      → length of stay (post-admission, indirect leakage)
+    # 'hday'      → record day (post-admission)
 
     df['sex_num'] = (df['sex'] == 'male').astype(float)
 
@@ -1245,31 +1237,31 @@ def _load_support2(seed=42):
         'name': 'SUPPORT2',
         'source': 'UCI(id=880)/5 hospitals/1989-1994',
         'n_raw': len(y), 'd_raw': X.shape[1],
-        'description': ('Klinik mortalite, SIZINTI TEMİZ, '
-                        'sadece kabul anı öznitelikleri'),
+        'description': ('Clinical mortality, LEAKAGE CLEAN, '
+                        'only admission time attributes'),
         'feature_names': actual_names,
         'real_data': True,
         'leakage_removed': [
-            'd.time (ölüm süresi)',
-            'prg2m/prg6m (doktor tahmini)',
-            'surv2m/surv6m (model tahmini)',
-            'slos (kalış süresi)',
-            'hday (kayıt günü)',
+            'd.time (death time)',
+            'prg2m/prg6m (doctor estimate)',
+            'surv2m/surv6m (model estimate)',
+            'slos (length of stay)',
+            'hday (record day)',
         ],
     }
 def _load_flchain(seed=42):
     """
     FLCHAIN — Free Light Chain mortality.
-    Kaynak: R survival paketi, ~7,874 hasta
+    Source: R survival package, ~7,874 patients
 
-    Hedef: death (orijinal)
-    Min follow-up filtresi: death=0 VE futime<365 gün → censored → DROP
+    Target: death (original)
+    Min follow-up filter: death=0 AND futime<365 days → censored → DROP
 
-    Sızıntı temizliği:
-      - futime    ATILDI
-      - chapter   ATILDI
-      - flc.grp   ATILDI
-      - sample.yr ATILDI
+    Leakage cleanup:
+      - futime    DROPPED
+      - chapter   DROPPED
+      - flc.grp   DROPPED
+      - sample.yr DROPPED
     """
     url = ("https://raw.githubusercontent.com/vincentarelbundock/"
            "Rdatasets/master/csv/survival/flchain.csv")
@@ -1279,15 +1271,15 @@ def _load_flchain(seed=42):
 
     MIN_FOLLOWUP = 365
 
-    # ── Censored DROPLE ──
+    # ── DROP Censored ──
     mask_censored = (df['death'] == 0) & (df['futime'] < MIN_FOLLOWUP)
     n_dropped = mask_censored.sum()
     df = df[~mask_censored].copy()
 
-    # ── Hedef: orijinal death ──
+    # ── Target: original death ──
     y = df['death'].astype(np.float64).values
 
-    # ── SIZINTI AT ──
+    # ── DROP LEAKAGE ──
     drop_cols = ['death', 'futime', 'chapter', 'flc.grp', 'sample.yr']
     df = df.drop(columns=[c for c in drop_cols if c in df.columns],
                  errors='ignore')
@@ -1329,17 +1321,17 @@ def _load_flchain(seed=42):
 
 def _load_metabric(seed=42):
     """
-    METABRIC — Meme kanseri mortalite.
-    Kaynak: pycox, ~1,904 hasta
-    Hedef: event (0/1)
-    SIZINTI TEMİZ: tedavi indeksleri (x7, x8) atıldı.
+    METABRIC — Breast cancer mortality.
+    Source: pycox, ~1,904 patients
+    Target: event (0/1)
+    LEAKAGE CLEAN: treatment indices (x7, x8) dropped.
     """
     from pycox.datasets import metabric
     df = metabric.read_df()
 
     y = df["event"].astype(np.float64).values
 
-    # x7 = radiotherapy, x8 = chemotherapy → at (confounding)
+    # x7 = radiotherapy, x8 = chemotherapy → drop (confounding)
     drop_cols = ["duration", "event", "x7", "x8"]
     feature_cols = [c for c in df.columns if c not in drop_cols]
 
@@ -1349,8 +1341,8 @@ def _load_metabric(seed=42):
     ]
 
     assert len(feature_cols) == len(real_names), (
-        f"Beklenen {len(real_names)} sütun, "
-        f"bulunan {len(feature_cols)}: {feature_cols}")
+        f"Expected {len(real_names)} columns, "
+        f"found {len(feature_cols)}: {feature_cols}")
 
     df_feat = df[feature_cols].copy()
     df_feat.columns = real_names
@@ -1365,34 +1357,34 @@ def _load_metabric(seed=42):
 
     return X, y, {
         'name': 'METABRIC',
-        'source': 'pycox/1,904 meme kanseri hasta',
+        'source': 'pycox/1,904 breast cancer patients',
         'n_raw': len(y), 'd_raw': X.shape[1],
-        'description': 'Meme kanseri mortalite, patoloji+demografik',
+        'description': 'Breast cancer mortality, pathology+demographic',
         'feature_names': real_names,
         'real_data': True,
         'leakage_removed': [
-            'x7=radiotherapy (tedavi, confounding)',
-            'x8=chemotherapy (tedavi, confounding)',
+            'x7=radiotherapy (treatment, confounding)',
+            'x8=chemotherapy (treatment, confounding)',
         ],
     }
 def _load_messidor(seed=42):
     """
-    Messidor Diabetic Retinopathy — ARFF dosyasından.
-    Dosya: messidor_features.arff (aynı dizinde)
-    Sütun eşleme (UCI dökümantasyonu):
+    Messidor Diabetic Retinopathy — from ARFF file.
+    File: messidor_features.arff (in same directory)
+    Column mapping (UCI documentation):
       0  = quality
-      1  = pre_screening       → SIZINTI
+      1  = pre_screening       → LEAKAGE
       2..7  = ma1..ma6
       8..15 = exudate1..exudate8
       16 = macula_opticdisc_distance
       17 = opticdisc_diameter
-      18 = am_fm_classification → SIZINTI
+      18 = am_fm_classification → LEAKAGE
       Class = target
     """
     arff_path = os.path.join(os.getcwd(), 'messidor_features.arff')
     if not os.path.exists(arff_path):
         raise FileNotFoundError(
-            f"messidor_features.arff bulunamadı: {arff_path}")
+            f"messidor_features.arff not found: {arff_path}")
 
     # ARFF parse
     attributes = []
@@ -1415,7 +1407,7 @@ def _load_messidor(seed=42):
 
     df = pd.DataFrame(data_lines, columns=attributes)
 
-    # Sayısala çevir
+    # Convert to numeric
     for col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -1423,10 +1415,10 @@ def _load_messidor(seed=42):
     target_col = 'Class' if 'Class' in df.columns else 'class'
     y = df[target_col].astype(np.float64).values
 
-    # ── SÜTUN İSİMLERİ (sayısal → anlamlı) ──
+    # ── COLUMN NAMES (numeric → meaningful) ──
     col_map = {
         '0': 'quality',
-        '1': 'pre_screening',        # SIZINTI
+        '1': 'pre_screening',        # LEAKAGE
         '2': 'ma1', '3': 'ma2', '4': 'ma3',
         '5': 'ma4', '6': 'ma5', '7': 'ma6',
         '8': 'exudate1', '9': 'exudate2',
@@ -1435,24 +1427,24 @@ def _load_messidor(seed=42):
         '14': 'exudate7', '15': 'exudate8',
         '16': 'macula_od_dist',
         '17': 'opticdisc_diam',
-        '18': 'am_fm_class',         # SIZINTI
+        '18': 'am_fm_class',         # LEAKAGE
     }
     df = df.rename(columns=col_map)
 
-    # ── SIZINTI AT ──
+    # ── DROP LEAKAGE ──
     df = df.drop(
         columns=[c for c in ['pre_screening', 'am_fm_class',
                               target_col] if c in df.columns],
         errors='ignore')
 
-    # ── MULTİKOLİNEARİTE AZALT ──
+    # ── REDUCE MULTICOLLINEARITY ──
     drop_multi = [f'ma{i}' for i in range(2, 6)] + \
                  [f'exudate{i}' for i in range(2, 8)]
     df = df.drop(
         columns=[c for c in drop_multi if c in df.columns],
         errors='ignore')
 
-    # ── 7 TEMİZ FEATURE ──
+    # ── 7 CLEAN FEATURES ──
     feature_cols = [
         'quality', 'ma1', 'ma6',
         'exudate1', 'exudate8',
@@ -1477,52 +1469,52 @@ def _load_messidor(seed=42):
         'source': 'UCI(329)/Messidor fundus images',
         'n_raw': len(y),
         'd_raw': X.shape[1],
-        'description': ('Diabetic retinopathy tarama, '
-                        'sızıntı-temiz, multikolinearite-azaltılmış'),
+        'description': ('Diabetic retinopathy screening, '
+                        'leakage-clean, multicollinearity-reduced'),
         'feature_names': available,
         'real_data': True,
         'leakage_removed': [
-            'pre_screening (önceki model çıktısı)',
-            'am_fm_classification (AM/FM model çıktısı)',
+            'pre_screening (previous model output)',
+            'am_fm_classification (AM/FM model output)',
         ],
         'multicollinearity_reduced': [
-            'ma2-5 atıldı → ma1(α=0.5) + ma6(α=1.0)',
-            'exudate2-7 atıldı → exudate1 + exudate8',
+            'ma2-5 dropped → ma1(α=0.5) + ma6(α=1.0)',
+            'exudate2-7 dropped → exudate1 + exudate8',
         ],
     }
 def _load_vtc(seed=42):
     """
     VTC — Vancomycin Trough Concentration & ICU Mortality
-    Kaynak: eICU-CRD / Hou et al. (2021)
-    Dosya: vtc.csv (aynı dizinde)
+    Source: eICU-CRD / Hou et al. (2021)
+    File: vtc.csv (in same directory)
 
-    n ≈ 3,603 hasta
-    Target: unitdischargestatus (ICU ölümü)
-    Ana predictor: Mean VTC (sürekli!)
+    n ≈ 3,603 patients
+    Target: unitdischargestatus (ICU death)
+    Main predictor: Mean VTC (continuous!)
 
-    SIZINTI TEMİZ:
-      - hospitaldischargestatus ATILDI (alternatif target)
-      - dosage_sum ATILDI (post-hoc ilaç bilgisi)
-      - drugstartoffset ATILDI (zaman bilgisi)
-      - drugstopoffset ATILDI (zaman bilgisi)
-      - frequency ATILDI (dozaj sıklığı)
-      - patientunitstayid ATILDI (ID)
+    LEAKAGE CLEAN:
+      - hospitaldischargestatus DROPPED (alternative target)
+      - dosage_sum DROPPED (post-hoc drug info)
+      - drugstartoffset DROPPED (time info)
+      - drugstopoffset DROPPED (time info)
+      - frequency DROPPED (dosing frequency)
+      - patientunitstayid DROPPED (ID)
     """
     csv_path = os.path.join(os.getcwd(), 'vtc.csv')
     if not os.path.exists(csv_path):
         raise FileNotFoundError(
-            f"vtc.csv bulunamadı: {csv_path}")
+            f"vtc.csv not found: {csv_path}")
 
     df = pd.read_csv(csv_path, na_values=[' ', '', 'NA', 'NaN'])
 
     # ── TARGET ──
-    # unitdischargestatus: ICU çıkış durumu
-    # 0=ALIVE, 1=EXPIRED veya string olabilir
+    # unitdischargestatus: ICU discharge status
+    # 0=ALIVE, 1=EXPIRED or string
     target_col = 'unitdischargestatus'
     if target_col not in df.columns:
-        raise ValueError(f"Target sütunu '{target_col}' bulunamadı")
+        raise ValueError(f"Target column '{target_col}' not found")
 
-    # String ise çevir
+    # Convert if string
     if df[target_col].dtype == object:
         df[target_col] = df[target_col].str.strip().str.upper()
         df[target_col] = df[target_col].map({
@@ -1531,43 +1523,43 @@ def _load_vtc(seed=42):
         })
     y = df[target_col].astype(np.float64).values
 
-    # ── SIZINTI AT ──
+    # ── DROP LEAKAGE ──
     drop_cols = [
         'patientunitstayid',
-        'hospitaldischargestatus',  # alternatif target
-        'dosage_sum',               # post-hoc ilaç bilgisi
-        'drugstartoffset',          # zaman bilgisi
-        'drugstopoffset',           # zaman bilgisi
-        'frequency',                # dozaj sıklığı
+        'hospitaldischargestatus',  # alternative target
+        'dosage_sum',               # post-hoc drug info
+        'drugstartoffset',          # time info
+        'drugstopoffset',           # time info
+        'frequency',                # dosing frequency
         target_col,                 # target
     ]
     df = df.drop(columns=[c for c in drop_cols if c in df.columns],
                  errors='ignore')
 
-    # ── GENDER KODLAMA ──
+    # ── GENDER CODING ──
     if 'gender' in df.columns:
         df['male'] = (df['gender'].str.strip().str.upper()
                       .isin(['MALE', 'M'])).astype(float)
         df = df.drop(columns=['gender'])
 
-    # ── ETHNICITY KODLAMA ──
+    # ── ETHNICITY CODING ──
     if 'ethnicity' in df.columns:
         df['caucasian'] = (df['ethnicity'].str.strip().str.upper()
                            .str.contains('CAUCASIAN|WHITE')).astype(float)
         df = df.drop(columns=['ethnicity'])
 
-    # ── SÜREKLİ FEATURES (KRAL ∂η/∂x için ideal) ──
+    # ── CONTINUOUS FEATURES (Ideal for KRAL ∂η/∂x) ──
     continuous_cols = [
-        'Mean',           # Ana predictor: Mean VTC (sürekli)
-        'age',            # Yaş (sürekli)
-        'BMI',            # BMI (sürekli)
-        'apachescore',    # APACHE IV skoru (sürekli)
-        'creatinineavg',  # Ortalama kreatinin (sürekli)
-        'CCl',            # CrCl - Cockcroft-Gault (sürekli)
-        'N',              # VTC ölçüm sayısı (sürekli)
+        'Mean',           # Main predictor: Mean VTC (continuous)
+        'age',            # Age (continuous)
+        'BMI',            # BMI (continuous)
+        'apachescore',    # APACHE IV score (continuous)
+        'creatinineavg',  # Average creatinine (continuous)
+        'CCl',            # CrCl - Cockcroft-Gault (continuous)
+        'N',              # VTC measurement count (continuous)
     ]
 
-    # ── BINARY FEATURES (confounding düzeltmesi) ──
+    # ── BINARY FEATURES (confounding correction) ──
     binary_cols = [
         'ventilation',
         'dialysis',
@@ -1588,7 +1580,7 @@ def _load_vtc(seed=42):
         'caucasian',
     ]
 
-    # Mean sütununu vtc_mean olarak yeniden adlandır
+    # Rename Mean column to vtc_mean
     if 'Mean' in df.columns:
         df = df.rename(columns={'Mean': 'vtc_mean'})
 
@@ -1608,11 +1600,11 @@ def _load_vtc(seed=42):
         if miss.any():
             col[miss] = np.nanmedian(col[~miss])
 
-    # Temizlik
+    # Cleanup
     mask = np.isfinite(X).all(axis=1) & np.isfinite(y)
     X, y = X[mask], y[mask]
 
-    # Hedef NaN kontrolü
+    # Target NaN check
     valid = ~np.isnan(y)
     X, y = X[valid], y[valid]
 
@@ -1623,28 +1615,28 @@ def _load_vtc(seed=42):
         'source': 'eICU-CRD/3,603 ICU patients',
         'n_raw': len(y),
         'd_raw': X.shape[1],
-        'description': ('Vancomycin trough → ICU mortalite, '
-                        'sürekli VTC/yaş/BMI/CrCl, censored YOK'),
+        'description': ('Vancomycin trough → ICU mortality, '
+                        'continuous VTC/age/BMI/CrCl, NO censoring'),
         'feature_names': feature_names,
         'real_data': True,
         'continuous_predictors': available_cont,
         'binary_predictors': available_bin,
         'primary_predictor': 'vtc_mean',
         'leakage_removed': [
-            'hospitaldischargestatus (alternatif target)',
-            'dosage_sum (post-hoc ilaç)',
-            'drugstartoffset/drugstopoffset (zaman)',
-            'frequency (dozaj sıklığı)',
+            'hospitaldischargestatus (alternative target)',
+            'dosage_sum (post-hoc drug)',
+            'drugstartoffset/drugstopoffset (time)',
+            'frequency (dosing frequency)',
         ],
-        'expected_nlm_pattern': 'U-shape (düşük ve yüksek VTC → ölüm)',
+        'expected_nlm_pattern': 'U-shape (low and high VTC → death)',
     }
 
 # =====================================================================
-# YARDIMCI
+# HELPERS
 # =====================================================================
 
 def load_all(normalize=True, seed=42, datasets=None):
-    """Tüm veya seçili veri setlerini yükle."""
+    """Load all or selected datasets."""
     all_names = [
         'breast_cancer', 'wine', 'digits', 'iris',
         'heart', 'diabetes', 'ionosphere', 'australian',
@@ -1668,7 +1660,7 @@ def load_all(normalize=True, seed=42, datasets=None):
 
 
 def dataset_summary():
-    """Özet tablo."""
+    """Summary table."""
     print(f"\n{'=' * 85}")
     print(f"  KALE Benchmark Datasets")
     print(f"{'=' * 85}")
@@ -1687,7 +1679,7 @@ def dataset_summary():
 
 if __name__ == '__main__':
     print("╔" + "═" * 75 + "╗")
-    print("║  KALE — Dataset Loader (Düzeltildi)                                    ║")
+    print("║  KALE — Dataset Loader (Fixed)                                    ║")
     print("╚" + "═" * 75 + "╝")
 
     print("\n  [1] All datasets (normalized):")
